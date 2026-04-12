@@ -17,7 +17,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgba(27, 59, 54, 0.7), rgba(27, 59, 54, 0.3));
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.2));
 }
 
 .dashboard-layout {

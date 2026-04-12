@@ -49,7 +49,7 @@ const Login = () => {
         className="auth-image-section hidden lg:block"
         style={{
           backgroundImage:
-            'url(https://images.pexels.com/photos/853427/pexels-photo-853427.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940)'
+            'url(https://customer-assets.emergentagent.com/job_beauty-billing-4/artifacts/1wcpalfs_Screenshot%202026-04-12%20120611.jpg)'
         }}
       >
         <div className="relative z-10 p-12 text-white flex flex-col justify-between h-full">
@@ -63,7 +63,7 @@ const Login = () => {
             </p>
           </div>
           <div>
-            <p className="text-sm text-white/70">Trusted by 500+ premium salons worldwide</p>
+            <p className="text-[10px] text-white/40 tracking-wider">Created by Kbon Moirang</p>
           </div>
         </div>
       </div>
