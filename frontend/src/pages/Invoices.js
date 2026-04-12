@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { authAxios, API } from '@/App';
 import { toast } from 'sonner';
-import { Plus, Eye, FileText, Download, Printer, Send, Mail, Phone } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Printer, Send, Mail, Phone, UserPlus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 
@@ -26,6 +26,9 @@ const Invoices = () => {
     notes: ''
   });
   const [selectedServices, setSelectedServices] = useState([]);
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', notes: '' });
+  const [addingCustomer, setAddingCustomer] = useState(false);
   const printRef = useRef(null);
 
   useEffect(() => {
@@ -110,6 +113,29 @@ const Invoices = () => {
   const resetForm = () => {
     setFormData({ customer_id: '', staff_id: '', items: [], discount: 0, payment_method: 'cash', notes: '' });
     setSelectedServices([]);
+    setShowAddCustomer(false);
+    setNewCustomer({ name: '', phone: '', email: '', notes: '' });
+  };
+
+  const handleAddCustomer = async () => {
+    if (!newCustomer.name || !newCustomer.phone) {
+      toast.error('Customer name and phone are required');
+      return;
+    }
+    setAddingCustomer(true);
+    try {
+      const response = await authAxios.post('/customers', newCustomer);
+      const created = response.data;
+      setCustomers([...customers, created]);
+      setFormData({ ...formData, customer_id: created.id });
+      setShowAddCustomer(false);
+      setNewCustomer({ name: '', phone: '', email: '', notes: '' });
+      toast.success(`Customer "${created.name}" added`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to add customer');
+    } finally {
+      setAddingCustomer(false);
+    }
   };
 
   const getCustomerName = (id) => customers.find(c => c.id === id)?.name || 'Unknown';
@@ -205,21 +231,83 @@ const Invoices = () => {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#1B3B36] mb-2">Customer *</label>
-                  <select
-                    value={formData.customer_id}
-                    onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                    className="input-field"
-                    required
-                    data-testid="invoice-customer-select"
-                  >
-                    <option value="">Select Customer</option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name} - {customer.phone}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-[#1B3B36]">Customer *</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCustomer(!showAddCustomer)}
+                      className="text-xs text-[#1B3B36] hover:text-[#D4AF37] flex items-center gap-1 transition-colors"
+                      data-testid="toggle-add-customer-inline"
+                    >
+                      <UserPlus size={13} />
+                      {showAddCustomer ? 'Select Existing' : 'Add New'}
+                    </button>
+                  </div>
+
+                  {!showAddCustomer ? (
+                    <select
+                      value={formData.customer_id}
+                      onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
+                      className="input-field"
+                      required
+                      data-testid="invoice-customer-select"
+                    >
+                      <option value="">Select Customer</option>
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name} - {customer.phone}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-4 border border-[#D4AF37]/30 bg-[#FBFBF9] rounded-xl space-y-3" data-testid="inline-add-customer-form">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-[#6B726C] mb-1">Name *</label>
+                          <input
+                            type="text"
+                            value={newCustomer.name}
+                            onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                            className="input-field text-sm"
+                            placeholder="Customer name"
+                            data-testid="inline-customer-name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#6B726C] mb-1">Phone *</label>
+                          <input
+                            type="tel"
+                            value={newCustomer.phone}
+                            onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                            className="input-field text-sm"
+                            placeholder="Phone number"
+                            data-testid="inline-customer-phone"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[#6B726C] mb-1">Email</label>
+                        <input
+                          type="email"
+                          value={newCustomer.email}
+                          onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                          className="input-field text-sm"
+                          placeholder="Email (optional)"
+                          data-testid="inline-customer-email"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddCustomer}
+                        disabled={addingCustomer}
+                        className="btn-primary text-sm w-full flex items-center justify-center gap-2"
+                        data-testid="inline-add-customer-button"
+                      >
+                        <UserPlus size={14} />
+                        {addingCustomer ? 'Adding...' : 'Add Customer & Select'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
