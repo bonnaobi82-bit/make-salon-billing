@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { API } from '@/App';
-import { Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -54,9 +54,13 @@ const Login = () => {
       >
         <div className="relative z-10 p-12 text-white flex flex-col justify-between h-full">
           <div>
-            <div className="flex items-center gap-2 mb-8">
-              <Sparkles className="w-8 h-8" strokeWidth={1.5} />
-              <h1 className="text-3xl font-serif font-bold">Salon Suite</h1>
+            <div className="mb-8">
+              <img
+                src="https://customer-assets.emergentagent.com/job_beauty-billing-4/artifacts/nvu5oiqm_ma-ke-salon-imphal-thangmeiband-imphal-beauty-parlours-df3cxeufl9%20%281%29.png"
+                alt="Ma-Ke Salon"
+                className="h-20 w-auto object-contain"
+                data-testid="login-salon-logo"
+              />
             </div>
             <p className="text-lg text-white/90 max-w-md">
               Premium billing and management software designed for modern salons
