@@ -1,0 +1,110 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 1 (Organic & Earthy) blended with Archetype 5 (Jewel & Luxury) - Premium Salon Concept",
+  "colors": {
+    "background": "#FBFBF9",
+    "surface": "#FFFFFF",
+    "primary": "#1B3B36",
+    "primary_foreground": "#FFFFFF",
+    "secondary": "#F0F2EE",
+    "secondary_foreground": "#1B3B36",
+    "accent": "#D4AF37",
+    "accent_foreground": "#1A1E1D",
+    "destructive": "#8C2A2A",
+    "destructive_foreground": "#FFFFFF",
+    "muted": "#F3F4F1",
+    "muted_foreground": "#6B726C",
+    "border": "#E8EAE6",
+    "ring": "#1B3B36"
+  },
+  "typography": {
+    "heading_font": "Playfair Display",
+    "body_font": "Manrope",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-serif tracking-tight text-[#1B3B36]",
+      "h2": "text-2xl sm:text-3xl font-serif tracking-tight text-[#1B3B36]",
+      "h3": "text-xl sm:text-2xl font-serif tracking-tight text-[#1B3B36]",
+      "h4": "text-lg font-medium font-sans text-[#1B3B36]",
+      "body": "text-base font-sans text-[#6B726C] leading-relaxed",
+      "small": "text-sm font-sans text-[#6B726C]",
+      "label": "text-xs font-sans tracking-[0.2em] uppercase text-[#6B726C]"
+    }
+  },
+  "layout_spacing": {
+    "container": "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8",
+    "section_gap": "gap-8 lg:gap-12",
+    "card_padding": "p-6 sm:p-8",
+    "grid_pattern": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "border_radius": "rounded-2xl"
+  },
+  "surface_strategies": {
+    "cards": "bg-white border border-[#E8EAE6] shadow-sm hover:shadow-md transition-shadow duration-300 rounded-2xl",
+    "header": "sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-[#E8EAE6]",
+    "sidebar": "bg-[#FBFBF9] border-r border-[#E8EAE6]"
+  },
+  "motion": {
+    "hover": "transition-all duration-300 ease-out",
+    "entrance": "animate-in fade-in slide-in-from-bottom-4 duration-500",
+    "button_active": "active:scale-[0.98] transition-transform"
+  },
+  "components": {
+    "button": {
+      "primary": "bg-[#1B3B36] text-white hover:bg-[#122B27] rounded-full px-6 py-2.5 text-sm font-medium transition-all shadow-sm",
+      "secondary": "bg-[#F0F2EE] text-[#1B3B36] hover:bg-[#E8EAE6] rounded-full px-6 py-2.5 text-sm font-medium transition-all",
+      "outline": "border border-[#E8EAE6] text-[#1B3B36] hover:bg-[#F3F4F1] rounded-full px-6 py-2.5 text-sm font-medium transition-all"
+    },
+    "input": "border-[#E8EAE6] bg-white focus:ring-2 focus:ring-[#1B3B36]/20 focus:border-[#1B3B36] rounded-xl px-4 py-2.5 text-sm transition-all",
+    "table": "w-full text-sm text-left text-[#6B726C]",
+    "badge": "px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#F0F2EE] text-[#1B3B36]"
+  },
+  "iconography": {
+    "library": "lucide-react",
+    "style": "strokeWidth={1.5} for a thin, elegant, premium look"
+  },
+  "media": {
+    "images": [
+      {
+        "category": "auth_background",
+        "url": "https://images.pexels.com/photos/853427/pexels-photo-853427.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Spacious and stylish hair salon interior for login page background"
+      },
+      {
+        "category": "auth_background_alt",
+        "url": "https://images.pexels.com/photos/7195799/pexels-photo-7195799.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Modern salon washing stations"
+      },
+      {
+        "category": "staff_avatar_1",
+        "url": "https://images.unsplash.com/photo-1767609122853-1ffdf6d6de06?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHw0fHxlbGVnYW50JTIwd29tYW4lMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU5NzEzMjN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Elegant professional woman (Stylist)"
+      },
+      {
+        "category": "staff_avatar_2",
+        "url": "https://images.unsplash.com/photo-1762522928601-862bf2a04902?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwxfHxlbGVnYW50JTIwd29tYW4lMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU5NzEzMjN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Smiling professional woman (Receptionist)"
+      },
+      {
+        "category": "product_inventory_1",
+        "url": "https://images.unsplash.com/photo-1695972235653-2d241f8cd412?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxsdXh1cnklMjBiZWF1dHklMjBwcm9kdWN0c3xlbnwwfHx8fDE3NzU5NzEzMjN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Luxury beauty product - skin care"
+      },
+      {
+        "category": "product_inventory_2",
+        "url": "https://images.unsplash.com/photo-1695972235781-bbcf3122d9fc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBiZWF1dHklMjBwcm9kdWN0c3xlbnwwfHx8fDE3NzU5NzEzMjN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Luxury beauty product - face oil"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build a premium SaaS dashboard tailored for high-end salons based on the exact specifications in this document.",
+    "Follow the 'Organic & Earthy' blended with 'Jewel & Luxury' archetype using the exact color codes provided. Do NOT use default Tailwind colors like slate or blue.",
+    "Use 'Playfair Display' for page titles and major metric numbers. Use 'Manrope' for all UI text, tables, and labels.",
+    "Adopt the 'Control Room Grid' for layout density, but give components breathing room using `p-6` or `p-8` inside cards. Ensure card borders are 1px #E8EAE6 to avoid heavy drop shadows.",
+    "Include Shadcn components (Tables, Calendars, Dialogs, Selects, Cards) heavily customized to reflect the premium aesthetic with `rounded-2xl` corners and custom button classes outlined here.",
+    "Implement an elegant dashboard layout featuring a Sidebar navigation and a sticky top-header using glassmorphism (`backdrop-blur-xl bg-white/80`).",
+    "Develop the following views mapping to the SaaS requirements: Customer Management Dashboard, Service Catalog & Pricing, Appointment Scheduling Calendar, Billing & Invoice Generation, Staff Management, Inventory Tracking, and Analytics Dashboard.",
+    "Data visualization (Charts) should use Recharts or Shadcn Charts with a muted, elegant color palette (Greens, Golds, Soft Grays) rather than default bright colors.",
+    "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., `data-testid=\"appointment-submit-button\"`).",
+    "Include the provided media URLs (salon interiors, staff portraits, and luxury products) realistically across the UI to enhance the premium prototype feel."
+  ]
+}
