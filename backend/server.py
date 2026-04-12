@@ -808,12 +808,20 @@ async def generate_invoice_pdf(invoice_id: str, current_user = Depends(get_curre
         try:
             logo_data, logo_ct = get_object(logo_path)
             logo_buffer = io.BytesIO(logo_data)
-            logo_img = RLImage(logo_buffer, width=40*mm, height=40*mm, kind='proportional')
+            # Use Pillow to ensure valid image format for ReportLab
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(logo_buffer)
+            if pil_img.mode in ('RGBA', 'LA', 'P'):
+                pil_img = pil_img.convert('RGB')
+            clean_buffer = io.BytesIO()
+            pil_img.save(clean_buffer, format='PNG')
+            clean_buffer.seek(0)
+            logo_img = RLImage(clean_buffer, width=35*mm, height=35*mm, kind='proportional')
             logo_img.hAlign = 'CENTER'
             elements.append(logo_img)
             elements.append(Spacer(1, 2*mm))
-        except Exception:
-            pass  # Skip logo if fetch fails
+        except Exception as e:
+            logging.warning(f"Failed to add logo to PDF: {e}")
     elements.append(Paragraph(salon['salon_name'], salon_name_style))
     elements.append(Paragraph(salon['address'], salon_detail_style))
     detail_parts = []

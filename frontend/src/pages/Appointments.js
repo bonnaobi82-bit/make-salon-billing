@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { authAxios } from '@/App';
 import { toast } from 'sonner';
-import { Plus, Calendar as CalendarIcon, Clock, User, Check, X, ChevronLeft, ChevronRight, List, Grid3X3 } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, User, Check, X, ChevronLeft, ChevronRight, List, Grid3X3, Mail, Phone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, endOfWeek, isToday } from 'date-fns';
 
