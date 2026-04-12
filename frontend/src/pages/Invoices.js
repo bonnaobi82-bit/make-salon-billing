@@ -10,6 +10,7 @@ const Invoices = () => {
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [services, setServices] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [salonProfile, setSalonProfile] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,6 +19,7 @@ const Invoices = () => {
   const [viewInvoice, setViewInvoice] = useState(null);
   const [formData, setFormData] = useState({
     customer_id: '',
+    staff_id: '',
     items: [],
     discount: 0,
     payment_method: 'cash',
@@ -32,15 +34,17 @@ const Invoices = () => {
 
   const fetchData = async () => {
     try {
-      const [invRes, custRes, servRes, profileRes] = await Promise.all([
+      const [invRes, custRes, servRes, staffRes, profileRes] = await Promise.all([
         authAxios.get('/invoices'),
         authAxios.get('/customers'),
         authAxios.get('/services'),
+        authAxios.get('/staff'),
         authAxios.get('/salon-profile')
       ]);
       setInvoices(invRes.data);
       setCustomers(custRes.data);
       setServices(servRes.data);
+      setStaff(staffRes.data);
       setSalonProfile(profileRes.data);
       // Load logo
       if (profileRes.data.logo_path) {
@@ -104,13 +108,14 @@ const Invoices = () => {
   };
 
   const resetForm = () => {
-    setFormData({ customer_id: '', items: [], discount: 0, payment_method: 'cash', notes: '' });
+    setFormData({ customer_id: '', staff_id: '', items: [], discount: 0, payment_method: 'cash', notes: '' });
     setSelectedServices([]);
   };
 
   const getCustomerName = (id) => customers.find(c => c.id === id)?.name || 'Unknown';
   const getCustomer = (id) => customers.find(c => c.id === id);
   const getServiceName = (id) => services.find(s => s.id === id)?.name || 'Unknown Service';
+  const getStaffName = (id) => staff.find(s => s.id === id)?.name || '';
 
   const openViewDialog = (invoice) => {
     setViewInvoice(invoice);
@@ -212,6 +217,23 @@ const Invoices = () => {
                     {customers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
                         {customer.name} - {customer.phone}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-[#1B3B36] mb-2">Staff Member</label>
+                  <select
+                    value={formData.staff_id}
+                    onChange={(e) => setFormData({ ...formData, staff_id: e.target.value })}
+                    className="input-field"
+                    data-testid="invoice-staff-select"
+                  >
+                    <option value="">Select Staff</option>
+                    {staff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.specialization && `- ${s.specialization}`}
                       </option>
                     ))}
                   </select>
@@ -332,6 +354,7 @@ const Invoices = () => {
                   <th>Invoice #</th>
                   <th>Date</th>
                   <th>Customer</th>
+                  <th>Staff</th>
                   <th>Items</th>
                   <th>Total</th>
                   <th>Payment</th>
@@ -342,11 +365,11 @@ const Invoices = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-8">Loading...</td>
+                    <td colSpan={9} className="text-center py-8">Loading...</td>
                   </tr>
                 ) : invoices.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-8" data-testid="no-invoices-message">
+                    <td colSpan={9} className="text-center py-8" data-testid="no-invoices-message">
                       No invoices found
                     </td>
                   </tr>
@@ -361,6 +384,7 @@ const Invoices = () => {
                       </td>
                       <td>{format(new Date(invoice.created_at), 'MMM dd, yyyy')}</td>
                       <td>{getCustomerName(invoice.customer_id)}</td>
+                      <td>{invoice.staff_id ? getStaffName(invoice.staff_id) : '-'}</td>
                       <td>{invoice.items.length} item(s)</td>
                       <td className="font-medium">Rs.{invoice.total.toFixed(2)}</td>
                       <td className="capitalize">{invoice.payment_method}</td>
@@ -451,6 +475,9 @@ const Invoices = () => {
                     <p><strong style={{ color: '#1B3B36' }}>Date:</strong> <span style={{ color: '#6B726C' }}>{format(new Date(viewInvoice.created_at), 'MMMM dd, yyyy')}</span></p>
                     <p><strong style={{ color: '#1B3B36' }}>Payment:</strong> <span style={{ color: '#6B726C', textTransform: 'uppercase' }}>{viewInvoice.payment_method}</span></p>
                     <p><strong style={{ color: '#1B3B36' }}>Status:</strong> <span className="badge badge-success">{viewInvoice.status}</span></p>
+                    {viewInvoice.staff_id && getStaffName(viewInvoice.staff_id) && (
+                      <p><strong style={{ color: '#1B3B36' }}>Staff:</strong> <span style={{ color: '#6B726C' }}>{getStaffName(viewInvoice.staff_id)}</span></p>
+                    )}
                   </div>
                   <div style={{ fontSize: '13px', lineHeight: 1.7, textAlign: 'right' }}>
                     <p><strong style={{ color: '#1B3B36' }}>Bill To:</strong></p>

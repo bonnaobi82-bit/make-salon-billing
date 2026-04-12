@@ -220,6 +220,7 @@ class InvoiceItemCreate(BaseModel):
 
 class InvoiceCreate(BaseModel):
     customer_id: str
+    staff_id: Optional[str] = None
     items: List[InvoiceItemCreate]
     discount: float = 0.0
     payment_method: str = 'cash'  # cash, card, upi
@@ -230,6 +231,7 @@ class Invoice(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     invoice_number: str
     customer_id: str
+    staff_id: Optional[str] = None
     items: List[dict]
     subtotal: float
     discount: float
@@ -521,6 +523,7 @@ async def create_invoice(invoice: InvoiceCreate, current_user = Depends(get_curr
     invoice_obj = Invoice(
         invoice_number=invoice_number,
         customer_id=invoice.customer_id,
+        staff_id=invoice.staff_id,
         items=[item.model_dump() for item in invoice.items],
         subtotal=subtotal,
         discount=discount,
@@ -851,7 +854,16 @@ async def generate_invoice_pdf(invoice_id: str, current_user = Depends(get_curre
     except Exception:
         inv_date = created_at_str
 
+    # Fetch staff name
+    staff_name_pdf = ''
+    if invoice.get('staff_id'):
+        staff_doc = await db.staff.find_one({"id": invoice['staff_id']}, {"_id": 0})
+        if staff_doc:
+            staff_name_pdf = staff_doc['name']
+
     inv_info_text = f"<b>Invoice #:</b> {invoice['invoice_number']}<br/><b>Date:</b> {inv_date}<br/><b>Payment:</b> {invoice.get('payment_method', 'cash').upper()}<br/><b>Status:</b> {invoice.get('status', 'paid').upper()}"
+    if staff_name_pdf:
+        inv_info_text += f"<br/><b>Staff:</b> {staff_name_pdf}"
     cust_info_text = f"<b>Bill To:</b><br/>{customer_name}"
     if customer_phone:
         cust_info_text += f"<br/>Phone: {customer_phone}"
