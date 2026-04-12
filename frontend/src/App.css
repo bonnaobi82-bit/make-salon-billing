@@ -1,34 +1,184 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.auth-container {
+  min-height: 100vh;
+  display: flex;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.auth-image-section {
+  flex: 1;
+  background-size: cover;
+  background-position: center;
+  position: relative;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.auth-image-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(27, 59, 54, 0.7), rgba(27, 59, 54, 0.3));
 }
 
-.App-link {
-    color: #61dafb;
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: #FBFBF9;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.sidebar {
+  width: 260px;
+  background-color: #FBFBF9;
+  border-right: 1px solid #E8EAE6;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 260px;
+}
+
+.top-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid #E8EAE6;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid #E8EAE6;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease-out;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  background-color: #1B3B36;
+  color: white;
+  border-radius: 9999px;
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background-color: #122B27;
+  box-shadow: 0 2px 8px rgba(27, 59, 54, 0.2);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background-color: #F0F2EE;
+  color: #1B3B36;
+  border-radius: 9999px;
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: #E8EAE6;
+}
+
+.input-field {
+  border: 1px solid #E8EAE6;
+  background: white;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  transition: all 0.3s;
+  width: 100%;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #1B3B36;
+  box-shadow: 0 0 0 3px rgba(27, 59, 54, 0.1);
+}
+
+.table-container {
+  background: white;
+  border: 1px solid #E8EAE6;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  font-size: 0.875rem;
+  color: #6B726C;
+}
+
+.data-table thead {
+  background-color: #F3F4F1;
+  border-bottom: 1px solid #E8EAE6;
+}
+
+.data-table th {
+  padding: 0.875rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #1B3B36;
+}
+
+.data-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #E8EAE6;
+}
+
+.data-table tbody tr:hover {
+  background-color: #FBFBF9;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-success {
+  background-color: #D4F4DD;
+  color: #1B5E20;
+}
+
+.badge-warning {
+  background-color: #FFF4E6;
+  color: #E65100;
+}
+
+.badge-info {
+  background-color: #E3F2FD;
+  color: #1565C0;
+}
+
+.badge-danger {
+  background-color: #FFEBEE;
+  color: #C62828;
 }
