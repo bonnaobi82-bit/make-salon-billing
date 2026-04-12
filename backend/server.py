@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Query, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -14,14 +14,15 @@ import jwt
 import bcrypt
 import resend
 import asyncio
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 import io
+import requests
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -40,6 +41,62 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
+
+# Twilio Configuration
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
+TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '')
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    try:
+        from twilio.rest import Client as TwilioClient
+        twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    except Exception:
+        pass
+
+# Object Storage Configuration
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+APP_NAME = "salon-billing"
+storage_key = None
+
+def init_storage():
+    global storage_key
+    if storage_key:
+        return storage_key
+    if not EMERGENT_KEY:
+        return None
+    try:
+        resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+        resp.raise_for_status()
+        storage_key = resp.json()["storage_key"]
+        return storage_key
+    except Exception as e:
+        logging.error(f"Storage init failed: {e}")
+        return None
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    if not key:
+        raise Exception("Storage not initialized")
+    resp = requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+def get_object(path: str):
+    key = init_storage()
+    if not key:
+        raise Exception("Storage not initialized")
+    resp = requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key}, timeout=60
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 # Create the main app
 app = FastAPI()
@@ -533,7 +590,167 @@ async def update_salon_profile(profile: SalonProfileUpdate, current_user = Depen
         await db.salon_profile.insert_one(doc)
     return {"message": "Salon profile updated"}
 
-# ============= INVOICE PDF GENERATION =============
+# ============= LOGO UPLOAD ROUTES =============
+
+@api_router.post("/salon-profile/logo")
+async def upload_logo(file: UploadFile = File(...), current_user = Depends(get_current_user)):
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, GIF images allowed")
+
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Max 5MB")
+
+    ext = file.filename.split(".")[-1] if "." in file.filename else "png"
+    storage_path = f"{APP_NAME}/logos/{uuid.uuid4()}.{ext}"
+
+    try:
+        result = put_object(storage_path, data, file.content_type or "image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+    # Store file reference
+    file_id = str(uuid.uuid4())
+    await db.files.insert_one({
+        "id": file_id,
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": file.content_type,
+        "size": result.get("size", len(data)),
+        "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    # Update salon profile with logo path
+    await db.salon_profile.update_one({}, {"$set": {"logo_path": result["path"]}})
+
+    return {"message": "Logo uploaded", "logo_path": result["path"], "file_id": file_id}
+
+@api_router.get("/files/{path:path}")
+async def serve_file(path: str, auth: str = Query(None), authorization: str = Header(None)):
+    # Support both header auth and query param auth for img tags
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    elif auth:
+        token = auth
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        data, content_type = get_object(path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve file: {str(e)}")
+
+    return Response(content=data, media_type=record.get("content_type", content_type))
+
+# ============= NOTIFICATION ROUTES (ENHANCED) =============
+
+class AppointmentNotification(BaseModel):
+    appointment_id: str
+    notification_type: str = "email"  # email or sms
+
+@api_router.post("/notifications/appointment-reminder")
+async def send_appointment_notification(data: AppointmentNotification, current_user = Depends(get_current_user)):
+    # Fetch appointment details
+    appointment = await db.appointments.find_one({"id": data.appointment_id}, {"_id": 0})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    customer = await db.customers.find_one({"id": appointment['customer_id']}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    service_ids = appointment.get('service_ids', [])
+    services_list = await db.services.find({"id": {"$in": service_ids}}, {"_id": 0}).to_list(100)
+    service_names = [s['name'] for s in services_list]
+
+    staff_member = await db.staff.find_one({"id": appointment.get('staff_id')}, {"_id": 0})
+    staff_name = staff_member['name'] if staff_member else 'Our team'
+
+    salon = await db.salon_profile.find_one({}, {"_id": 0})
+    salon_name = salon['salon_name'] if salon else 'Ma-ke Salon Unisex Hair & Skin'
+    salon_phone = salon.get('phone', '6909902650') if salon else '6909902650'
+
+    appt_date = appointment['appointment_date']
+    if isinstance(appt_date, str):
+        appt_date = datetime.fromisoformat(appt_date)
+    formatted_date = appt_date.strftime('%B %d, %Y at %I:%M %p')
+
+    if data.notification_type == "email":
+        if not RESEND_API_KEY:
+            raise HTTPException(status_code=400, detail="Email service not configured. Add RESEND_API_KEY to .env")
+        if not customer.get('email'):
+            raise HTTPException(status_code=400, detail="Customer has no email address")
+
+        html = f"""
+        <div style="font-family: 'Manrope', sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; background: #FBFBF9;">
+            <div style="text-align: center; padding-bottom: 20px; border-bottom: 2px solid #D4AF37; margin-bottom: 20px;">
+                <h1 style="font-family: serif; color: #1B3B36; font-size: 22px; margin: 0;">{salon_name}</h1>
+            </div>
+            <h2 style="color: #1B3B36; font-size: 18px;">Appointment Reminder</h2>
+            <p style="color: #6B726C; font-size: 14px;">Dear {customer['name']},</p>
+            <p style="color: #6B726C; font-size: 14px;">This is a reminder for your upcoming appointment:</p>
+            <div style="background: white; border: 1px solid #E8EAE6; border-radius: 12px; padding: 20px; margin: 15px 0;">
+                <p style="color: #1B3B36; margin: 5px 0;"><strong>Date:</strong> {formatted_date}</p>
+                <p style="color: #1B3B36; margin: 5px 0;"><strong>Services:</strong> {', '.join(service_names)}</p>
+                <p style="color: #1B3B36; margin: 5px 0;"><strong>Stylist:</strong> {staff_name}</p>
+            </div>
+            <p style="color: #6B726C; font-size: 14px;">If you need to reschedule, call us at {salon_phone}.</p>
+            <p style="color: #6B726C; font-size: 14px;">We look forward to seeing you!</p>
+            <div style="text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #E8EAE6;">
+                <p style="color: #6B726C; font-size: 11px;">Thank you for choosing {salon_name}</p>
+            </div>
+        </div>
+        """
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [customer['email']],
+            "subject": f"Appointment Reminder - {salon_name}",
+            "html": html
+        }
+        try:
+            email = await asyncio.to_thread(resend.Emails.send, params)
+            return {"status": "success", "type": "email", "message": f"Reminder sent to {customer['email']}", "email_id": email.get("id")}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+    elif data.notification_type == "sms":
+        if not twilio_client:
+            raise HTTPException(status_code=400, detail="SMS service not configured. Add TWILIO credentials to .env")
+        if not customer.get('phone'):
+            raise HTTPException(status_code=400, detail="Customer has no phone number")
+
+        sms_body = (
+            f"Hi {customer['name']}, reminder for your appointment at {salon_name} "
+            f"on {formatted_date}. "
+            f"Services: {', '.join(service_names)}. "
+            f"Stylist: {staff_name}. "
+            f"Call {salon_phone} to reschedule."
+        )
+        try:
+            message = await asyncio.to_thread(
+                twilio_client.messages.create,
+                body=sms_body,
+                from_=TWILIO_PHONE_NUMBER,
+                to=customer['phone']
+            )
+            return {"status": "success", "type": "sms", "message": f"SMS sent to {customer['phone']}", "sid": message.sid}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to send SMS: {str(e)}")
+
+    raise HTTPException(status_code=400, detail="Invalid notification type. Use 'email' or 'sms'.")
 
 @api_router.get("/invoices/{invoice_id}/pdf")
 async def generate_invoice_pdf(invoice_id: str, current_user = Depends(get_current_user)):
@@ -585,6 +802,18 @@ async def generate_invoice_pdf(invoice_id: str, current_user = Depends(get_curre
     bold_style = ParagraphStyle('BoldText', parent=styles['Normal'], fontSize=9, textColor=primary_color, fontName='Helvetica-Bold', leading=13)
 
     # ---- Salon Header ----
+    # Try to add logo
+    logo_path = salon.get('logo_path')
+    if logo_path:
+        try:
+            logo_data, logo_ct = get_object(logo_path)
+            logo_buffer = io.BytesIO(logo_data)
+            logo_img = RLImage(logo_buffer, width=40*mm, height=40*mm, kind='proportional')
+            logo_img.hAlign = 'CENTER'
+            elements.append(logo_img)
+            elements.append(Spacer(1, 2*mm))
+        except Exception:
+            pass  # Skip logo if fetch fails
     elements.append(Paragraph(salon['salon_name'], salon_name_style))
     elements.append(Paragraph(salon['address'], salon_detail_style))
     detail_parts = []
@@ -819,6 +1048,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        init_storage()
+        logger.info("Object storage initialized successfully")
+    except Exception as e:
+        logger.error(f"Object storage init failed: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

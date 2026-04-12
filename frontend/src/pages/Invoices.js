@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { authAxios, API } from '@/App';
 import { toast } from 'sonner';
-import { Plus, Eye, FileText, Download, Printer } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Printer, Send, Mail, Phone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 
@@ -11,6 +11,7 @@ const Invoices = () => {
   const [customers, setCustomers] = useState([]);
   const [services, setServices] = useState([]);
   const [salonProfile, setSalonProfile] = useState(null);
+  const [logoUrl, setLogoUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -41,6 +42,19 @@ const Invoices = () => {
       setCustomers(custRes.data);
       setServices(servRes.data);
       setSalonProfile(profileRes.data);
+      // Load logo
+      if (profileRes.data.logo_path) {
+        try {
+          const token = localStorage.getItem('token');
+          const logoRes = await fetch(`${API}/files/${profileRes.data.logo_path}?auth=${token}`);
+          if (logoRes.ok) {
+            const blob = await logoRes.blob();
+            setLogoUrl(URL.createObjectURL(blob));
+          }
+        } catch (err) {
+          console.error('Failed to load logo', err);
+        }
+      }
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -412,6 +426,9 @@ const Invoices = () => {
               <div ref={printRef}>
                 {/* Salon Header */}
                 <div style={{ textAlign: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '2px solid #D4AF37' }}>
+                  {logoUrl && (
+                    <img src={logoUrl} alt="Salon Logo" style={{ height: '60px', maxWidth: '200px', objectFit: 'contain', margin: '0 auto 8px' }} />
+                  )}
                   <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: '22px', fontWeight: 700, color: '#1B3B36', marginBottom: '6px' }}>
                     {salonProfile?.salon_name || 'Ma-ke Salon Unisex Hair & Skin'}
                   </h2>

@@ -158,6 +158,135 @@ class SalonAPITester:
             print(f"   Found {len(response)} services")
         return success
 
+    def test_logo_upload(self):
+        """Test logo upload functionality"""
+        # Create a simple test image (1x1 PNG)
+        import base64
+        # Minimal PNG data for a 1x1 transparent pixel
+        png_data = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77yQAAAABJRU5ErkJggg==')
+        
+        try:
+            url = f"{self.base_url}/salon-profile/logo"
+            headers = {'Authorization': f'Bearer {self.token}'}
+            files = {'file': ('test_logo.png', png_data, 'image/png')}
+            
+            print(f"\n🔍 Testing Logo Upload...")
+            response = requests.post(url, headers=headers, files=files)
+            
+            self.tests_run += 1
+            if response.status_code == 200:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                result = response.json()
+                logo_path = result.get('logo_path')
+                print(f"   Logo uploaded to: {logo_path}")
+                self.test_results.append({"test": "Logo Upload", "status": "PASSED", "details": f"Logo path: {logo_path}"})
+                return True, logo_path
+            else:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                try:
+                    error_detail = response.json()
+                    print(f"   Error: {error_detail}")
+                    self.test_results.append({"test": "Logo Upload", "status": "FAILED", "details": f"Status {response.status_code}: {error_detail}"})
+                except:
+                    print(f"   Response: {response.text}")
+                    self.test_results.append({"test": "Logo Upload", "status": "FAILED", "details": f"Status {response.status_code}: {response.text}"})
+                return False, None
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            self.test_results.append({"test": "Logo Upload", "status": "FAILED", "details": f"Exception: {str(e)}"})
+            return False, None
+
+    def test_file_serving(self, logo_path):
+        """Test file serving with authentication"""
+        if not logo_path:
+            print("❌ No logo path available for file serving test")
+            self.test_results.append({"test": "File Serving", "status": "SKIPPED", "details": "No logo path available"})
+            return False
+            
+        try:
+            url = f"{self.base_url}/files/{logo_path}?auth={self.token}"
+            print(f"\n🔍 Testing File Serving...")
+            response = requests.get(url)
+            
+            self.tests_run += 1
+            if response.status_code == 200:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                print(f"   Content-Type: {response.headers.get('content-type', 'N/A')}")
+                print(f"   Content-Length: {len(response.content)} bytes")
+                self.test_results.append({"test": "File Serving", "status": "PASSED", "details": f"Content-Type: {response.headers.get('content-type')}"})
+                return True
+            else:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                self.test_results.append({"test": "File Serving", "status": "FAILED", "details": f"Status {response.status_code}"})
+                return False
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            self.test_results.append({"test": "File Serving", "status": "FAILED", "details": f"Exception: {str(e)}"})
+            return False
+
+    def test_appointment_reminder_notification(self):
+        """Test appointment reminder notification (should fail due to missing config)"""
+        # First get appointments to find one to test with
+        success, appointments = self.run_test(
+            "Get Appointments for Notification Test",
+            "GET", 
+            "appointments",
+            200
+        )
+        
+        if not success or not appointments:
+            print("❌ No appointments available for notification test")
+            self.test_results.append({"test": "Appointment Reminder", "status": "SKIPPED", "details": "No appointments available"})
+            return False
+            
+        appointment_id = appointments[0].get('id') if appointments else None
+        if not appointment_id:
+            print("❌ No valid appointment ID for notification test")
+            self.test_results.append({"test": "Appointment Reminder", "status": "SKIPPED", "details": "No valid appointment ID"})
+            return False
+            
+        # Test email reminder (should fail with config error)
+        print(f"\n🔍 Testing Email Reminder (expecting config error)...")
+        success, response = self.run_test(
+            "Email Reminder (Config Error Expected)",
+            "POST",
+            "notifications/appointment-reminder",
+            400,  # Expecting 400 due to missing email config
+            data={"appointment_id": appointment_id, "notification_type": "email"}
+        )
+        
+        if success:
+            print("✅ Email reminder correctly returned config error")
+        
+        # Test SMS reminder (should fail with config error)  
+        print(f"\n🔍 Testing SMS Reminder (expecting config error)...")
+        success, response = self.run_test(
+            "SMS Reminder (Config Error Expected)",
+            "POST",
+            "notifications/appointment-reminder",
+            400,  # Expecting 400 due to missing SMS config
+            data={"appointment_id": appointment_id, "notification_type": "sms"}
+        )
+        
+        if success:
+            print("✅ SMS reminder correctly returned config error")
+            
+        return True
+
+    def test_get_appointments(self):
+        """Test getting appointments"""
+        success, response = self.run_test(
+            "Get Appointments",
+            "GET",
+            "appointments",
+            200
+        )
+        if success and isinstance(response, list):
+            print(f"   Found {len(response)} appointments")
+        return success, response
+
 def main():
     print("🧪 Starting Salon Billing Software API Tests")
     print("=" * 50)
@@ -180,6 +309,23 @@ def main():
         else:
             print(f"⚠️  Salon name mismatch. Expected: {expected_salon_name}, Got: {profile_data.get('salon_name')}")
 
+    # Test logo upload functionality
+    logo_upload_success, logo_path = tester.test_logo_upload()
+    
+    # Test file serving if logo upload succeeded
+    if logo_upload_success and logo_path:
+        tester.test_file_serving(logo_path)
+        
+        # Test salon profile again to verify logo_path field is returned
+        print(f"\n🔍 Verifying salon profile returns logo_path after upload...")
+        profile_success_after, profile_data_after = tester.test_get_salon_profile()
+        if profile_success_after and profile_data_after.get('logo_path'):
+            print(f"✅ Salon profile now includes logo_path: {profile_data_after.get('logo_path')}")
+            tester.test_results.append({"test": "Salon Profile Logo Path", "status": "PASSED", "details": f"Logo path returned: {profile_data_after.get('logo_path')}"})
+        else:
+            print(f"❌ Salon profile does not include logo_path field")
+            tester.test_results.append({"test": "Salon Profile Logo Path", "status": "FAILED", "details": "logo_path field not returned"})
+
     # Test salon profile update
     tester.test_update_salon_profile()
 
@@ -193,6 +339,10 @@ def main():
     # Test other endpoints
     tester.test_get_customers()
     tester.test_get_services()
+    
+    # Test appointments and notifications
+    tester.test_get_appointments()
+    tester.test_appointment_reminder_notification()
 
     # Print results summary
     print("\n" + "=" * 50)

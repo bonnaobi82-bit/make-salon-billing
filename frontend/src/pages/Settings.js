@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
-import { authAxios } from '@/App';
+import { authAxios, API } from '@/App';
 import { toast } from 'sonner';
-import { Mail, Bell, Key, Store, Save, Check } from 'lucide-react';
+import { Mail, Bell, Store, Save, Check, Upload, ImageIcon, Phone, Send } from 'lucide-react';
 
 const Settings = () => {
   const [salonProfile, setSalonProfile] = useState({
@@ -12,8 +12,14 @@ const Settings = () => {
     email: '',
     gst_number: ''
   });
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [logoPath, setLogoPath] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [smsConfigured, setSmsConfigured] = useState(false);
 
   useEffect(() => {
     fetchSalonProfile();
@@ -29,10 +35,63 @@ const Settings = () => {
         email: response.data.email || '',
         gst_number: response.data.gst_number || ''
       });
+      // Load logo if exists
+      if (response.data.logo_path) {
+        setLogoPath(response.data.logo_path);
+        try {
+          const token = localStorage.getItem('token');
+          const logoRes = await fetch(`${API}/files/${response.data.logo_path}?auth=${token}`);
+          if (logoRes.ok) {
+            const blob = await logoRes.blob();
+            setLogoUrl(URL.createObjectURL(blob));
+          }
+        } catch (err) {
+          console.error('Failed to load logo', err);
+        }
+      }
     } catch (error) {
       toast.error('Failed to load salon profile');
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      toast.error('Only JPEG, PNG, WebP, GIF images allowed');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large. Max 5MB');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await authAxios.post('/salon-profile/logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success('Logo uploaded successfully');
+      // Refresh logo
+      setLogoPath(response.data.logo_path);
+      const token = localStorage.getItem('token');
+      const logoRes = await fetch(`${API}/files/${response.data.logo_path}?auth=${token}`);
+      if (logoRes.ok) {
+        const blob = await logoRes.blob();
+        if (logoUrl) URL.revokeObjectURL(logoUrl);
+        setLogoUrl(URL.createObjectURL(blob));
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to upload logo');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -85,7 +144,50 @@ const Settings = () => {
           {profileLoading ? (
             <p className="text-sm text-[#6B726C]">Loading profile...</p>
           ) : (
-            <form onSubmit={handleSaveProfile} className="space-y-4">
+            <div className="space-y-6">
+              {/* Logo Upload */}
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  <div
+                    className="w-28 h-28 rounded-2xl border-2 border-dashed border-[#E8EAE6] flex items-center justify-center overflow-hidden bg-[#FBFBF9] cursor-pointer hover:border-[#1B3B36] transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="logo-upload-area"
+                  >
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Salon Logo" className="w-full h-full object-contain" />
+                    ) : (
+                      <div className="text-center p-2">
+                        <ImageIcon size={28} className="text-[#6B726C] mx-auto mb-1" strokeWidth={1.5} />
+                        <p className="text-[10px] text-[#6B726C]">Upload Logo</p>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleLogoUpload}
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    data-testid="logo-file-input"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-[#1B3B36] mb-1">Salon Logo</h4>
+                  <p className="text-xs text-[#6B726C] mb-3">This logo will appear on your invoices and PDF printouts. Max 5MB, JPEG/PNG/WebP.</p>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="btn-secondary flex items-center gap-2 text-sm"
+                    disabled={uploading}
+                    data-testid="upload-logo-button"
+                  >
+                    <Upload size={14} />
+                    {uploading ? 'Uploading...' : logoUrl ? 'Change Logo' : 'Upload Logo'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Profile Form */}
+              <form onSubmit={handleSaveProfile} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-[#1B3B36] mb-2">Salon Name *</label>
@@ -151,7 +253,8 @@ const Settings = () => {
                 {saving ? <Save size={16} className="animate-spin" /> : <Check size={16} />}
                 {saving ? 'Saving...' : 'Save Profile'}
               </button>
-            </form>
+              </form>
+            </div>
           )}
         </div>
 
