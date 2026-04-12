@@ -138,6 +138,8 @@ class Customer(BaseModel):
     notes: Optional[str] = None
     total_visits: int = 0
     total_spent: float = 0.0
+    loyalty_points: int = 0
+    membership_tier: str = 'bronze'  # bronze, silver, gold, platinum
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ServiceCreate(BaseModel):
@@ -192,6 +194,9 @@ class Staff(BaseModel):
     specialization: Optional[str] = None
     commission_rate: float
     is_active: bool = True
+    total_services: int = 0
+    total_revenue: float = 0.0
+    incentive_balance: float = 0.0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class InventoryCreate(BaseModel):
@@ -376,6 +381,93 @@ async def delete_customer(customer_id: str, current_user = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Customer not found")
     return {"message": "Customer deleted"}
 
+# ============= LOYALTY ROUTES =============
+
+class RedeemPointsRequest(BaseModel):
+    customer_id: str
+    points_to_redeem: int
+
+@api_router.post("/loyalty/redeem")
+async def redeem_loyalty_points(data: RedeemPointsRequest, current_user = Depends(get_current_user)):
+    customer = await db.customers.find_one({"id": data.customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    current_points = customer.get('loyalty_points', 0)
+    if data.points_to_redeem > current_points:
+        raise HTTPException(status_code=400, detail=f"Not enough points. Available: {current_points}")
+    if data.points_to_redeem < 100:
+        raise HTTPException(status_code=400, detail="Minimum 100 points required to redeem")
+    
+    # 100 points = Rs.50 discount
+    discount_value = (data.points_to_redeem / 100) * 50
+    
+    await db.customers.update_one(
+        {"id": data.customer_id},
+        {"$inc": {"loyalty_points": -data.points_to_redeem}}
+    )
+    
+    # Log redemption
+    await db.loyalty_history.insert_one({
+        "id": str(uuid.uuid4()),
+        "customer_id": data.customer_id,
+        "type": "redeemed",
+        "points": -data.points_to_redeem,
+        "discount_value": discount_value,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "message": f"Redeemed {data.points_to_redeem} points for Rs.{discount_value:.0f} discount",
+        "discount_value": discount_value,
+        "remaining_points": current_points - data.points_to_redeem
+    }
+
+@api_router.get("/loyalty/history/{customer_id}")
+async def get_loyalty_history(customer_id: str, current_user = Depends(get_current_user)):
+    history = await db.loyalty_history.find(
+        {"customer_id": customer_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return history
+
+class StaffIncentivePayoutRequest(BaseModel):
+    staff_id: str
+    amount: float
+    notes: Optional[str] = None
+
+@api_router.post("/staff/payout-incentive")
+async def payout_staff_incentive(data: StaffIncentivePayoutRequest, current_user = Depends(get_current_user)):
+    staff_doc = await db.staff.find_one({"id": data.staff_id}, {"_id": 0})
+    if not staff_doc:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    
+    balance = staff_doc.get('incentive_balance', 0)
+    if data.amount > balance:
+        raise HTTPException(status_code=400, detail=f"Amount exceeds balance. Available: Rs.{balance:.2f}")
+    
+    await db.staff.update_one(
+        {"id": data.staff_id},
+        {"$inc": {"incentive_balance": -data.amount}}
+    )
+    
+    await db.incentive_history.insert_one({
+        "id": str(uuid.uuid4()),
+        "staff_id": data.staff_id,
+        "type": "payout",
+        "amount": data.amount,
+        "notes": data.notes,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": f"Paid out Rs.{data.amount:.2f}", "remaining_balance": balance - data.amount}
+
+@api_router.get("/staff/incentive-history/{staff_id}")
+async def get_incentive_history(staff_id: str, current_user = Depends(get_current_user)):
+    history = await db.incentive_history.find(
+        {"staff_id": staff_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return history
+
 # ============= SERVICE ROUTES =============
 
 @api_router.post("/services", response_model=Service)
@@ -537,13 +629,45 @@ async def create_invoice(invoice: InvoiceCreate, current_user = Depends(get_curr
     doc['created_at'] = doc['created_at'].isoformat()
     await db.invoices.insert_one(doc)
     
-    # Update customer stats
+    # Update customer stats and loyalty points (1 point per Rs.10 spent)
+    points_earned = int(total / 10)
+    customer_doc = await db.customers.find_one({"id": invoice.customer_id}, {"_id": 0})
+    new_total_spent = (customer_doc.get('total_spent', 0) if customer_doc else 0) + total
+    new_points = (customer_doc.get('loyalty_points', 0) if customer_doc else 0) + points_earned
+
+    # Determine tier based on total spent
+    if new_total_spent >= 50000:
+        tier = 'platinum'
+    elif new_total_spent >= 20000:
+        tier = 'gold'
+    elif new_total_spent >= 5000:
+        tier = 'silver'
+    else:
+        tier = 'bronze'
+
     await db.customers.update_one(
         {"id": invoice.customer_id},
         {
-            "$inc": {"total_visits": 1, "total_spent": total}
+            "$inc": {"total_visits": 1, "total_spent": total, "loyalty_points": points_earned},
+            "$set": {"membership_tier": tier}
         }
     )
+
+    # Update staff stats if staff assigned
+    if invoice.staff_id:
+        staff_doc = await db.staff.find_one({"id": invoice.staff_id}, {"_id": 0})
+        commission_rate = staff_doc.get('commission_rate', 0) if staff_doc else 0
+        incentive = total * (commission_rate / 100)
+        await db.staff.update_one(
+            {"id": invoice.staff_id},
+            {
+                "$inc": {
+                    "total_services": len(invoice.items),
+                    "total_revenue": total,
+                    "incentive_balance": incentive
+                }
+            }
+        )
     
     return invoice_obj
 
