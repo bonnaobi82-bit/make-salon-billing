@@ -3,12 +3,13 @@ FROM node:18-alpine AS build
 
 WORKDIR /app
 
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+COPY package.json ./
+COPY yarn.lock* ./
+RUN yarn install
 
 COPY . .
 
-ENV REACT_APP_BACKEND_URL=http://localhost:8001
+ENV REACT_APP_BACKEND_URL=
 
 RUN yarn build
 
