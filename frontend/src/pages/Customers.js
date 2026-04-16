@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { authAxios } from '@/App';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Phone, Mail, Search, Star, Gift } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, Mail, Search, Star, Gift, MessageCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 const Customers = () => {
@@ -14,6 +14,7 @@ const Customers = () => {
   const [loyaltyDialogOpen, setLoyaltyDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [redeemPoints, setRedeemPoints] = useState(100);
+  const [salonProfile, setSalonProfile] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -42,9 +43,13 @@ const Customers = () => {
 
   const fetchCustomers = async () => {
     try {
-      const response = await authAxios.get('/customers');
-      setCustomers(response.data);
-      setFilteredCustomers(response.data);
+      const [custRes, profileRes] = await Promise.all([
+        authAxios.get('/customers'),
+        authAxios.get('/salon-profile')
+      ]);
+      setCustomers(custRes.data);
+      setFilteredCustomers(custRes.data);
+      setSalonProfile(profileRes.data);
     } catch (error) {
       toast.error('Failed to load customers');
     } finally {
@@ -126,6 +131,41 @@ const Customers = () => {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to redeem points');
     }
+  };
+
+  const sendWelcomeWhatsApp = (customer) => {
+    if (!customer?.phone) {
+      toast.error('Customer has no phone number');
+      return;
+    }
+    let digits = customer.phone.replace(/[^0-9]/g, '');
+    if (digits.startsWith('0')) digits = '91' + digits.slice(1);
+    if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
+
+    const salonName = salonProfile?.salon_name || 'Ma-ke Salon Unisex Hair & Skin';
+    const salonAddr = salonProfile?.address || 'Thangmeiband Sanakeithel Road, Manipur, Imphal -795001';
+    const salonPhone = salonProfile?.phone || '6909902650';
+
+    const message = [
+      `Hello *${customer.name}*! Welcome to *${salonName}*`,
+      ``,
+      `We're thrilled to have you as our valued customer!`,
+      ``,
+      `As a member, you'll enjoy:`,
+      `- Loyalty points on every visit (1 pt per Rs.10)`,
+      `- Exclusive tier upgrades (Bronze > Silver > Gold > Platinum)`,
+      `- Redeem points for discounts`,
+      ``,
+      `Visit us at:`,
+      `${salonAddr}`,
+      ``,
+      `Book appointments: ${salonPhone}`,
+      ``,
+      `Thank you for choosing us!`
+    ].join('\n');
+
+    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`, '_blank');
+    toast.success('WhatsApp opened with welcome message');
   };
 
   return (
@@ -267,6 +307,14 @@ const Customers = () => {
                       <td className="font-medium">Rs.{(customer.total_spent || 0).toLocaleString()}</td>
                       <td>
                         <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => sendWelcomeWhatsApp(customer)}
+                            className="p-2 hover:bg-[#dcf8c6] rounded-lg transition-colors"
+                            title="Send Welcome via WhatsApp"
+                            data-testid={`whatsapp-customer-${customer.id}`}
+                          >
+                            <MessageCircle size={16} className="text-[#25D366]" />
+                          </button>
                           <button
                             onClick={() => openLoyaltyDialog(customer)}
                             className="p-2 hover:bg-[#FFF4D4] rounded-lg transition-colors"

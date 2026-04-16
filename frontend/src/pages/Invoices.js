@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { authAxios, API } from '@/App';
 import { toast } from 'sonner';
-import { Plus, Eye, FileText, Download, Printer, Send, Mail, Phone, UserPlus } from 'lucide-react';
+import { Plus, Eye, FileText, Download, Printer, Send, Mail, Phone, UserPlus, MessageCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 
@@ -208,6 +208,91 @@ const Invoices = () => {
       </html>
     `);
     printWindow.document.close();
+  };
+
+  const formatPhoneForWhatsApp = (phone) => {
+    // Strip non-digits, ensure country code
+    let digits = phone.replace(/[^0-9]/g, '');
+    if (digits.startsWith('0')) digits = '91' + digits.slice(1);
+    if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
+    return digits;
+  };
+
+  const sendInvoiceWhatsApp = (invoice) => {
+    const customer = getCustomer(invoice.customer_id);
+    if (!customer?.phone) {
+      toast.error('Customer has no phone number');
+      return;
+    }
+    const phone = formatPhoneForWhatsApp(customer.phone);
+    const salonName = salonProfile?.salon_name || 'Ma-ke Salon Unisex Hair & Skin';
+    const salonPhone = salonProfile?.phone || '6909902650';
+    const staffName = invoice.staff_id ? getStaffName(invoice.staff_id) : '';
+
+    const itemLines = invoice.items.map((item, i) =>
+      `  ${i + 1}. ${getServiceName(item.service_id)} x${item.quantity} - Rs.${(item.price * item.quantity).toFixed(2)}`
+    ).join('\n');
+
+    const message = [
+      `*${salonName}*`,
+      `Invoice: *${invoice.invoice_number}*`,
+      `Date: ${format(new Date(invoice.created_at), 'dd MMM yyyy')}`,
+      ``,
+      `Dear *${customer.name}*,`,
+      ``,
+      `Thank you for visiting us! Here's your bill:`,
+      ``,
+      `*Services:*`,
+      itemLines,
+      ``,
+      `Subtotal: Rs.${invoice.subtotal.toFixed(2)}`,
+      invoice.discount > 0 ? `Discount: -Rs.${invoice.discount.toFixed(2)}` : '',
+      `Tax (18%): Rs.${invoice.tax.toFixed(2)}`,
+      `*Total: Rs.${invoice.total.toFixed(2)}*`,
+      `Payment: ${invoice.payment_method.toUpperCase()}`,
+      staffName ? `Served by: ${staffName}` : '',
+      ``,
+      `We look forward to seeing you again!`,
+      `Call us: ${salonPhone}`
+    ].filter(Boolean).join('\n');
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+    toast.success('WhatsApp opened with invoice');
+  };
+
+  const sendWelcomeWhatsApp = (customerId) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer?.phone) {
+      toast.error('Customer has no phone number');
+      return;
+    }
+    const phone = formatPhoneForWhatsApp(customer.phone);
+    const salonName = salonProfile?.salon_name || 'Ma-ke Salon Unisex Hair & Skin';
+    const salonAddr = salonProfile?.address || 'Thangmeiband Sanakeithel Road, Manipur, Imphal -795001';
+    const salonPhone = salonProfile?.phone || '6909902650';
+
+    const message = [
+      `Hello *${customer.name}*! Welcome to *${salonName}*`,
+      ``,
+      `We're thrilled to have you as our valued customer!`,
+      ``,
+      `As a member, you'll enjoy:`,
+      `- Loyalty points on every visit (1 pt per Rs.10)`,
+      `- Exclusive tier upgrades (Bronze > Silver > Gold > Platinum)`,
+      `- Redeem points for discounts`,
+      ``,
+      `Visit us at:`,
+      `${salonAddr}`,
+      ``,
+      `Book appointments: ${salonPhone}`,
+      ``,
+      `Thank you for choosing us!`
+    ].join('\n');
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+    toast.success('WhatsApp opened with welcome message');
   };
 
   return (
@@ -497,6 +582,14 @@ const Invoices = () => {
                           >
                             <Download size={16} className="text-[#D4AF37]" />
                           </button>
+                          <button
+                            onClick={() => sendInvoiceWhatsApp(invoice)}
+                            className="p-2 hover:bg-[#dcf8c6] rounded-lg transition-colors"
+                            title="Send via WhatsApp"
+                            data-testid={`whatsapp-invoice-${invoice.id}`}
+                          >
+                            <MessageCircle size={16} className="text-[#25D366]" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -514,6 +607,14 @@ const Invoices = () => {
               <DialogTitle className="flex items-center justify-between">
                 <span>Invoice {viewInvoice?.invoice_number}</span>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => viewInvoice && sendInvoiceWhatsApp(viewInvoice)}
+                    className="flex items-center gap-2 text-sm px-4 py-2 rounded-full bg-[#25D366] text-white hover:bg-[#1da851] transition-all font-medium"
+                    data-testid="whatsapp-invoice-from-view-button"
+                  >
+                    <MessageCircle size={16} />
+                    WhatsApp
+                  </button>
                   <button
                     onClick={handlePrint}
                     className="btn-secondary flex items-center gap-2 text-sm"
