@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: make-salon-db
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: make-salon-backend
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=salon_billing_db
+      - CORS_ORIGINS=*
+      - JWT_SECRET=salon-billing-secret-key-change-in-production
+      - RESEND_API_KEY=
+      - SENDER_EMAIL=onboarding@resend.dev
+      - TWILIO_ACCOUNT_SID=
+      - TWILIO_AUTH_TOKEN=
+      - TWILIO_PHONE_NUMBER=
+      - EMERGENT_LLM_KEY=
+    depends_on:
+      - mongodb
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: make-salon-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: make-salon-seed
+    command: python /app/seed_data.py
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=salon_billing_db
+    depends_on:
+      - mongodb
+    restart: "no"
+
+volumes:
+  mongo_data:
