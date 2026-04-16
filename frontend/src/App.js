@@ -14,6 +14,7 @@ import Staff from '@/pages/Staff';
 import Inventory from '@/pages/Inventory';
 import Invoices from '@/pages/Invoices';
 import Settings from '@/pages/Settings';
+import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -121,6 +122,7 @@ function App() {
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />
+      <PWAInstallPrompt />
     </div>
   );
 }
