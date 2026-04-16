@@ -164,7 +164,7 @@ const Customers = () => {
       `Thank you for choosing us!`
     ].join('\n');
 
-    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`, '_blank');
+    window.open(`https://web.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(message)}`, '_blank');
     toast.success('WhatsApp opened with welcome message');
   };
 

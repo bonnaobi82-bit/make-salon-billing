@@ -256,7 +256,7 @@ const Invoices = () => {
       `Call us: ${salonPhone}`
     ].filter(Boolean).join('\n');
 
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    const url = `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
     toast.success('WhatsApp opened with invoice');
   };
@@ -290,7 +290,7 @@ const Invoices = () => {
       `Thank you for choosing us!`
     ].join('\n');
 
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    const url = `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
     toast.success('WhatsApp opened with welcome message');
   };
