@@ -29,6 +29,8 @@ services:
       - EMERGENT_LLM_KEY=
     depends_on:
       - mongodb
+    volumes:
+      - uploads_data:/app/uploads
 
   frontend:
     build:
@@ -43,3 +45,4 @@ services:
 
 volumes:
   mongo_data:
+  uploads_data:

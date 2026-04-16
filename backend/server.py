@@ -22,7 +22,6 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 import io
-import requests
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -54,49 +53,9 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
     except Exception:
         pass
 
-# Object Storage Configuration
-STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
-APP_NAME = "salon-billing"
-storage_key = None
-
-def init_storage():
-    global storage_key
-    if storage_key:
-        return storage_key
-    if not EMERGENT_KEY:
-        return None
-    try:
-        resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
-        resp.raise_for_status()
-        storage_key = resp.json()["storage_key"]
-        return storage_key
-    except Exception as e:
-        logging.error(f"Storage init failed: {e}")
-        return None
-
-def put_object(path: str, data: bytes, content_type: str) -> dict:
-    key = init_storage()
-    if not key:
-        raise Exception("Storage not initialized")
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data, timeout=120
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-def get_object(path: str):
-    key = init_storage()
-    if not key:
-        raise Exception("Storage not initialized")
-    resp = requests.get(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key}, timeout=60
-    )
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+# Local File Storage Configuration
+UPLOAD_DIR = Path("/app/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Create the main app
 app = FastAPI()
@@ -730,33 +689,33 @@ async def upload_logo(file: UploadFile = File(...), current_user = Depends(get_c
         raise HTTPException(status_code=400, detail="File too large. Max 5MB")
 
     ext = file.filename.split(".")[-1] if "." in file.filename else "png"
-    storage_path = f"{APP_NAME}/logos/{uuid.uuid4()}.{ext}"
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = UPLOAD_DIR / filename
 
-    try:
-        result = put_object(storage_path, data, file.content_type or "image/png")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    with open(file_path, "wb") as f:
+        f.write(data)
+
+    storage_path = f"uploads/{filename}"
 
     # Store file reference
     file_id = str(uuid.uuid4())
     await db.files.insert_one({
         "id": file_id,
-        "storage_path": result["path"],
+        "storage_path": storage_path,
         "original_filename": file.filename,
         "content_type": file.content_type,
-        "size": result.get("size", len(data)),
+        "size": len(data),
         "is_deleted": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 
     # Update salon profile with logo path
-    await db.salon_profile.update_one({}, {"$set": {"logo_path": result["path"]}})
+    await db.salon_profile.update_one({}, {"$set": {"logo_path": storage_path}})
 
-    return {"message": "Logo uploaded", "logo_path": result["path"], "file_id": file_id}
+    return {"message": "Logo uploaded", "logo_path": storage_path, "file_id": file_id}
 
 @api_router.get("/files/{path:path}")
 async def serve_file(path: str, auth: str = Query(None), authorization: str = Header(None)):
-    # Support both header auth and query param auth for img tags
     token = None
     if authorization and authorization.startswith("Bearer "):
         token = authorization[7:]
@@ -775,12 +734,16 @@ async def serve_file(path: str, auth: str = Query(None), authorization: str = He
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
 
-    try:
-        data, content_type = get_object(path)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve file: {str(e)}")
+    # Read from local storage
+    filename = path.replace("uploads/", "")
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
 
-    return Response(content=data, media_type=record.get("content_type", content_type))
+    with open(file_path, "rb") as f:
+        data = f.read()
+
+    return Response(content=data, media_type=record.get("content_type", "image/png"))
 
 # ============= NOTIFICATION ROUTES (ENHANCED) =============
 
@@ -933,20 +896,20 @@ async def generate_invoice_pdf(invoice_id: str, current_user = Depends(get_curre
     logo_path = salon.get('logo_path')
     if logo_path:
         try:
-            logo_data, logo_ct = get_object(logo_path)
-            logo_buffer = io.BytesIO(logo_data)
-            # Use Pillow to ensure valid image format for ReportLab
-            from PIL import Image as PILImage
-            pil_img = PILImage.open(logo_buffer)
-            if pil_img.mode in ('RGBA', 'LA', 'P'):
-                pil_img = pil_img.convert('RGB')
-            clean_buffer = io.BytesIO()
-            pil_img.save(clean_buffer, format='PNG')
-            clean_buffer.seek(0)
-            logo_img = RLImage(clean_buffer, width=35*mm, height=35*mm, kind='proportional')
-            logo_img.hAlign = 'CENTER'
-            elements.append(logo_img)
-            elements.append(Spacer(1, 2*mm))
+            filename = logo_path.replace("uploads/", "")
+            local_path = UPLOAD_DIR / filename
+            if local_path.exists():
+                from PIL import Image as PILImage
+                pil_img = PILImage.open(str(local_path))
+                if pil_img.mode in ('RGBA', 'LA', 'P'):
+                    pil_img = pil_img.convert('RGB')
+                clean_buffer = io.BytesIO()
+                pil_img.save(clean_buffer, format='PNG')
+                clean_buffer.seek(0)
+                logo_img = RLImage(clean_buffer, width=35*mm, height=35*mm, kind='proportional')
+                logo_img.hAlign = 'CENTER'
+                elements.append(logo_img)
+                elements.append(Spacer(1, 2*mm))
         except Exception as e:
             logging.warning(f"Failed to add logo to PDF: {e}")
     elements.append(Paragraph(salon['salon_name'], salon_name_style))
@@ -1195,11 +1158,8 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_event():
-    try:
-        init_storage()
-        logger.info("Object storage initialized successfully")
-    except Exception as e:
-        logger.error(f"Object storage init failed: {e}")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info("Server started, upload directory ready")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
