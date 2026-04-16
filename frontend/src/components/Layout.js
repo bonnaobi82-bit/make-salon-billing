@@ -54,7 +54,7 @@ const Layout = ({ children }) => {
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
             <Sparkles className="w-7 h-7 text-[#D4AF37]" strokeWidth={1.5} />
-            <h1 className="text-2xl font-serif font-bold text-[#1B3B36]">Salon Suite</h1>
+            <h1 className="text-2xl font-serif font-bold text-[#1B3B36]">Ma-Ke Salon</h1>
           </div>
 
           <nav className="space-y-1">
