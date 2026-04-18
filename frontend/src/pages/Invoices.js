@@ -29,6 +29,8 @@ const Invoices = () => {
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', notes: '' });
   const [addingCustomer, setAddingCustomer] = useState(false);
+  const [discountType, setDiscountType] = useState('percent'); // 'percent' or 'flat'
+  const [discountInput, setDiscountInput] = useState(0);
   const printRef = useRef(null);
 
   useEffect(() => {
@@ -99,8 +101,15 @@ const Invoices = () => {
       price: s.price
     }));
 
+    // Calculate flat discount from percentage if needed
+    const subtotal = selectedServices.reduce((sum, s) => sum + (s.price * s.quantity), 0);
+    const flatDiscount = discountType === 'percent'
+      ? (subtotal * discountInput / 100)
+      : discountInput;
+    const invoiceData = { ...formData, items, discount: flatDiscount };
+
     try {
-      const response = await authAxios.post('/invoices', { ...formData, items });
+      const response = await authAxios.post('/invoices', invoiceData);
       const createdInvoice = response.data;
       toast.success('Invoice created successfully');
       setDialogOpen(false);
@@ -135,6 +144,8 @@ const Invoices = () => {
     setSelectedServices([]);
     setShowAddCustomer(false);
     setNewCustomer({ name: '', phone: '', email: '', notes: '' });
+    setDiscountType('percent');
+    setDiscountInput(0);
   };
 
   const handleAddCustomer = async () => {
@@ -493,16 +504,43 @@ const Invoices = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-[#1B3B36] mb-2">Discount (Rs.)</label>
-                    <input
-                      type="number"
-                      value={formData.discount}
-                      onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })}
-                      className="input-field"
-                      min="0"
-                      step="0.01"
-                      data-testid="invoice-discount-input"
-                    />
+                    <label className="block text-sm font-medium text-[#1B3B36] mb-2">Discount</label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center bg-[#F0F2EE] rounded-full p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setDiscountType('percent')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${discountType === 'percent' ? 'bg-[#1B3B36] text-white' : 'text-[#6B726C]'}`}
+                          data-testid="discount-type-percent"
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDiscountType('flat')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${discountType === 'flat' ? 'bg-[#1B3B36] text-white' : 'text-[#6B726C]'}`}
+                          data-testid="discount-type-flat"
+                        >
+                          Rs.
+                        </button>
+                      </div>
+                      <input
+                        type="number"
+                        value={discountInput}
+                        onChange={(e) => setDiscountInput(parseFloat(e.target.value) || 0)}
+                        className="input-field flex-1"
+                        min="0"
+                        max={discountType === 'percent' ? 100 : undefined}
+                        step={discountType === 'percent' ? 1 : 0.01}
+                        placeholder={discountType === 'percent' ? '0 %' : 'Rs. 0'}
+                        data-testid="invoice-discount-input"
+                      />
+                    </div>
+                    {discountType === 'percent' && discountInput > 0 && selectedServices.length > 0 && (
+                      <p className="text-xs text-[#D4AF37] mt-1">
+                        = Rs.{(selectedServices.reduce((sum, s) => sum + (s.price * s.quantity), 0) * discountInput / 100).toFixed(2)} off
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#1B3B36] mb-2">Payment Method</label>
