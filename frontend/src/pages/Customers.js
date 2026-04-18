@@ -133,39 +133,26 @@ const Customers = () => {
     }
   };
 
-  const sendWelcomeWhatsApp = (customer) => {
+  const sendWelcomeWhatsApp = async (customer) => {
     if (!customer?.phone) {
       toast.error('Customer has no phone number');
       return;
     }
-    let digits = customer.phone.replace(/[^0-9]/g, '');
-    if (digits.startsWith('0')) digits = '91' + digits.slice(1);
-    if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
 
-    const salonName = salonProfile?.salon_name || 'Ma-ke Salon Unisex Hair & Skin';
-    const salonAddr = salonProfile?.address || 'Thangmeiband Sanakeithel Road, Manipur, Imphal -795001';
-    const salonPhone = salonProfile?.phone || '6909902650';
-
-    const message = [
-      `Hello *${customer.name}*! Welcome to *${salonName}*`,
-      ``,
-      `We're thrilled to have you as our valued customer!`,
-      ``,
-      `As a member, you'll enjoy:`,
-      `- Loyalty points on every visit (1 pt per Rs.10)`,
-      `- Exclusive tier upgrades (Bronze > Silver > Gold > Platinum)`,
-      `- Redeem points for discounts`,
-      ``,
-      `Visit us at:`,
-      `${salonAddr}`,
-      ``,
-      `Book appointments: ${salonPhone}`,
-      ``,
-      `Thank you for choosing us!`
-    ].join('\n');
-
-    window.open(`https://web.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(message)}`, '_blank');
-    toast.success('WhatsApp opened with welcome message');
+    try {
+      // Use WhatsApp Cloud API - auto sends, no clicking needed
+      await authAxios.post('/whatsapp/send-welcome', { customer_id: customer.id });
+      toast.success(`Welcome message sent to ${customer.name} via WhatsApp!`);
+    } catch (error) {
+      // Fallback to WhatsApp Web
+      let digits = customer.phone.replace(/[^0-9]/g, '');
+      if (digits.startsWith('0')) digits = '91' + digits.slice(1);
+      if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
+      const salonName = salonProfile?.salon_name || 'Ma-ke Salon';
+      const msg = `Hello *${customer.name}*! Welcome to *${salonName}*\n\nThank you for choosing us!`;
+      window.open(`https://web.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`, '_blank');
+      toast.info('WhatsApp API unavailable - opened WhatsApp Web instead');
+    }
   };
 
   return (

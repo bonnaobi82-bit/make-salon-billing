@@ -108,7 +108,7 @@ const Promotions = () => {
       return;
     }
 
-    const message = getMessageForCustomer('test');
+    const message = getMessageForCustomer('{name}');
     if (!message.trim()) {
       toast.error('Please select a template or write a custom message');
       return;
@@ -118,26 +118,32 @@ const Promotions = () => {
     setTotalToSend(customersWithPhone.length);
     setSentCount(0);
 
-    // Open WhatsApp for each customer with 1.5s delay
-    for (let i = 0; i < customersWithPhone.length; i++) {
-      const customer = customersWithPhone[i];
-      const phone = formatPhoneForWhatsApp(customer.phone);
-      const personalizedMessage = getMessageForCustomer(customer.name);
-
-      window.open(
-        `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(personalizedMessage)}`,
-        '_blank'
-      );
-
-      setSentCount(i + 1);
-
-      // Wait between opens to avoid browser blocking
-      if (i < customersWithPhone.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Use WhatsApp Cloud API for automatic bulk send
+      const response = await authAxios.post('/whatsapp/send-bulk-offer', { message });
+      setSentCount(response.data.sent || 0);
+      toast.success(response.data.message);
+      if (response.data.failed > 0) {
+        toast.warning(`${response.data.failed} message(s) failed to send`);
+      }
+    } catch (error) {
+      // Fallback to WhatsApp Web if API fails
+      toast.info('API unavailable, opening WhatsApp Web instead...');
+      for (let i = 0; i < customersWithPhone.length; i++) {
+        const customer = customersWithPhone[i];
+        const phone = formatPhoneForWhatsApp(customer.phone);
+        const personalizedMessage = getMessageForCustomer(customer.name);
+        window.open(
+          `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(personalizedMessage)}`,
+          '_blank'
+        );
+        setSentCount(i + 1);
+        if (i < customersWithPhone.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
       }
     }
 
-    toast.success(`WhatsApp opened for ${customersWithPhone.length} customers!`);
     setSending(false);
   };
 

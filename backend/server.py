@@ -57,6 +57,71 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
 UPLOAD_DIR = Path("/app/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# WhatsApp Cloud API Configuration
+WA_PHONE_NUMBER_ID = os.environ.get('WA_PHONE_NUMBER_ID', '')
+WA_ACCESS_TOKEN = os.environ.get('WA_ACCESS_TOKEN', '')
+WA_API_URL = f"https://graph.facebook.com/v25.0/{WA_PHONE_NUMBER_ID}/messages"
+
+import requests as http_requests
+
+def send_whatsapp_message(to_phone: str, message: str) -> dict:
+    """Send a WhatsApp text message via Meta Cloud API"""
+    if not WA_PHONE_NUMBER_ID or not WA_ACCESS_TOKEN:
+        raise Exception("WhatsApp Cloud API not configured")
+
+    # Format phone number - ensure country code
+    digits = ''.join(c for c in to_phone if c.isdigit())
+    if digits.startswith('0'):
+        digits = '91' + digits[1:]
+    if not digits.startswith('91') and len(digits) == 10:
+        digits = '91' + digits
+
+    headers = {
+        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": digits,
+        "type": "text",
+        "text": {"body": message}
+    }
+
+    resp = http_requests.post(WA_API_URL, json=payload, headers=headers, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+def send_whatsapp_template(to_phone: str, template_name: str, language: str = "en_US", components: list = None) -> dict:
+    """Send a WhatsApp template message via Meta Cloud API"""
+    if not WA_PHONE_NUMBER_ID or not WA_ACCESS_TOKEN:
+        raise Exception("WhatsApp Cloud API not configured")
+
+    digits = ''.join(c for c in to_phone if c.isdigit())
+    if digits.startswith('0'):
+        digits = '91' + digits[1:]
+    if not digits.startswith('91') and len(digits) == 10:
+        digits = '91' + digits
+
+    headers = {
+        "Authorization": f"Bearer {WA_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": digits,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language}
+        }
+    }
+    if components:
+        payload["template"]["components"] = components
+
+    resp = http_requests.post(WA_API_URL, json=payload, headers=headers, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
 # Create the main app
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -1138,6 +1203,165 @@ async def send_email(email_data: EmailNotification, current_user = Depends(get_c
     except Exception as e:
         logging.error(f"Failed to send email: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+# ============= WHATSAPP CLOUD API ROUTES =============
+
+class WhatsAppInvoiceMessage(BaseModel):
+    invoice_id: str
+
+@api_router.post("/whatsapp/send-invoice")
+async def send_invoice_whatsapp(data: WhatsAppInvoiceMessage, current_user = Depends(get_current_user)):
+    """Auto-send invoice via WhatsApp Cloud API - no manual clicking needed"""
+    invoice = await db.invoices.find_one({"id": data.invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    customer = await db.customers.find_one({"id": invoice['customer_id']}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    if not customer.get('phone'):
+        raise HTTPException(status_code=400, detail="Customer has no phone number")
+
+    salon = await db.salon_profile.find_one({}, {"_id": 0})
+    salon_name = salon['salon_name'] if salon else 'Ma-ke Salon Unisex Hair & Skin'
+    salon_phone = salon.get('phone', '6909902650') if salon else '6909902650'
+
+    # Get service names
+    service_ids = [item['service_id'] for item in invoice['items']]
+    services_list = await db.services.find({"id": {"$in": service_ids}}, {"_id": 0}).to_list(100)
+    service_map = {s['id']: s['name'] for s in services_list}
+
+    # Get staff name
+    staff_name = ''
+    if invoice.get('staff_id'):
+        staff_doc = await db.staff.find_one({"id": invoice['staff_id']}, {"_id": 0})
+        if staff_doc:
+            staff_name = staff_doc['name']
+
+    # Build message
+    item_lines = '\n'.join([
+        f"  {i+1}. {service_map.get(item['service_id'], 'Service')} x{item.get('quantity',1)} - Rs.{(item.get('price',0) * item.get('quantity',1)):.2f}"
+        for i, item in enumerate(invoice['items'])
+    ])
+
+    created_at = invoice['created_at']
+    if isinstance(created_at, str):
+        created_at = datetime.fromisoformat(created_at)
+    date_str = created_at.strftime('%d %b %Y')
+
+    message = (
+        f"*{salon_name}*\n"
+        f"Invoice: *{invoice['invoice_number']}*\n"
+        f"Date: {date_str}\n\n"
+        f"Dear *{customer['name']}*,\n\n"
+        f"Thank you for visiting us! Here's your bill:\n\n"
+        f"*Services:*\n{item_lines}\n\n"
+        f"Subtotal: Rs.{invoice['subtotal']:.2f}\n"
+    )
+    if invoice.get('discount', 0) > 0:
+        message += f"Discount: -Rs.{invoice['discount']:.2f}\n"
+    message += (
+        f"Tax (18%): Rs.{invoice['tax']:.2f}\n"
+        f"*Total: Rs.{invoice['total']:.2f}*\n"
+        f"Payment: {invoice.get('payment_method', 'cash').upper()}\n"
+    )
+    if staff_name:
+        message += f"Served by: {staff_name}\n"
+    message += f"\nWe look forward to seeing you again!\nCall us: {salon_phone}"
+
+    try:
+        result = await asyncio.to_thread(send_whatsapp_message, customer['phone'], message)
+        return {"status": "success", "message": f"Invoice sent to {customer['name']} via WhatsApp", "wa_response": result}
+    except Exception as e:
+        logging.error(f"WhatsApp send failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send WhatsApp: {str(e)}")
+
+class WhatsAppWelcomeMessage(BaseModel):
+    customer_id: str
+
+@api_router.post("/whatsapp/send-welcome")
+async def send_welcome_whatsapp(data: WhatsAppWelcomeMessage, current_user = Depends(get_current_user)):
+    """Send welcome message to customer via WhatsApp Cloud API"""
+    customer = await db.customers.find_one({"id": data.customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    if not customer.get('phone'):
+        raise HTTPException(status_code=400, detail="Customer has no phone number")
+
+    salon = await db.salon_profile.find_one({}, {"_id": 0})
+    salon_name = salon['salon_name'] if salon else 'Ma-ke Salon Unisex Hair & Skin'
+    salon_addr = salon.get('address', '') if salon else ''
+    salon_phone = salon.get('phone', '6909902650') if salon else '6909902650'
+
+    message = (
+        f"Hello *{customer['name']}*! Welcome to *{salon_name}*\n\n"
+        f"We're thrilled to have you as our valued customer!\n\n"
+        f"As a member, you'll enjoy:\n"
+        f"- Loyalty points on every visit (1 pt per Rs.10)\n"
+        f"- Exclusive tier upgrades (Bronze > Silver > Gold > Platinum)\n"
+        f"- Redeem points for discounts\n\n"
+        f"Visit us at:\n{salon_addr}\n\n"
+        f"Book appointments: {salon_phone}\n\n"
+        f"Thank you for choosing us!"
+    )
+
+    try:
+        result = await asyncio.to_thread(send_whatsapp_message, customer['phone'], message)
+        return {"status": "success", "message": f"Welcome message sent to {customer['name']}", "wa_response": result}
+    except Exception as e:
+        logging.error(f"WhatsApp send failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send WhatsApp: {str(e)}")
+
+class WhatsAppBulkOffer(BaseModel):
+    message: str
+
+@api_router.post("/whatsapp/send-bulk-offer")
+async def send_bulk_offer(data: WhatsAppBulkOffer, current_user = Depends(get_current_user)):
+    """Send promotional offer to all customers via WhatsApp Cloud API"""
+    customers_list = await db.customers.find({}, {"_id": 0}).to_list(10000)
+    customers_with_phone = [c for c in customers_list if c.get('phone')]
+
+    if not customers_with_phone:
+        raise HTTPException(status_code=400, detail="No customers with phone numbers")
+
+    salon = await db.salon_profile.find_one({}, {"_id": 0})
+    salon_name = salon['salon_name'] if salon else 'Ma-ke Salon Unisex Hair & Skin'
+    salon_phone = salon.get('phone', '6909902650') if salon else '6909902650'
+    salon_addr = salon.get('address', '') if salon else ''
+
+    sent = 0
+    failed = 0
+    errors = []
+
+    for customer in customers_with_phone:
+        # Personalize message
+        personalized = data.message.replace('{name}', customer['name']).replace('{salon}', salon_name).replace('{phone}', salon_phone).replace('{address}', salon_addr)
+
+        try:
+            await asyncio.to_thread(send_whatsapp_message, customer['phone'], personalized)
+            sent += 1
+        except Exception as e:
+            failed += 1
+            errors.append(f"{customer['name']}: {str(e)}")
+
+        # Small delay to avoid rate limiting
+        await asyncio.sleep(0.5)
+
+    return {
+        "status": "success",
+        "message": f"Sent to {sent}/{len(customers_with_phone)} customers",
+        "sent": sent,
+        "failed": failed,
+        "errors": errors[:5]
+    }
+
+@api_router.get("/whatsapp/status")
+async def whatsapp_status(current_user = Depends(get_current_user)):
+    """Check if WhatsApp Cloud API is configured"""
+    return {
+        "configured": bool(WA_PHONE_NUMBER_ID and WA_ACCESS_TOKEN),
+        "phone_number_id": WA_PHONE_NUMBER_ID[:6] + "..." if WA_PHONE_NUMBER_ID else ""
+    }
 
 # Include the router
 app.include_router(api_router)

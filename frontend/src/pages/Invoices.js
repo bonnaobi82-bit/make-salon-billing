@@ -105,50 +105,22 @@ const Invoices = () => {
       toast.success('Invoice created successfully');
       setDialogOpen(false);
 
-      // Auto-send via WhatsApp
-      const customer = customers.find(c => c.id === formData.customer_id);
-      if (customer?.phone) {
-        let digits = customer.phone.replace(/[^0-9]/g, '');
-        if (digits.startsWith('0')) digits = '91' + digits.slice(1);
-        if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
-
-        const salonName = salonProfile?.salon_name || 'Ma-ke Salon Unisex Hair & Skin';
-        const salonPhone = salonProfile?.phone || '6909902650';
-        const staffName = formData.staff_id ? (staff.find(s => s.id === formData.staff_id)?.name || '') : '';
-
-        const itemLines = selectedServices.map((s, i) =>
-          `  ${i + 1}. ${s.name} x${s.quantity} - Rs.${(s.price * s.quantity).toFixed(2)}`
-        ).join('\n');
-
-        const subtotal = selectedServices.reduce((sum, s) => sum + (s.price * s.quantity), 0);
-        const discount = formData.discount || 0;
-        const tax = (subtotal - discount) * 0.18;
-        const total = subtotal - discount + tax;
-
-        const message = [
-          `*${salonName}*`,
-          `Invoice: *${createdInvoice.invoice_number}*`,
-          `Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
-          ``,
-          `Dear *${customer.name}*,`,
-          ``,
-          `Thank you for visiting us! Here's your bill:`,
-          ``,
-          `*Services:*`,
-          itemLines,
-          ``,
-          `Subtotal: Rs.${subtotal.toFixed(2)}`,
-          discount > 0 ? `Discount: -Rs.${discount.toFixed(2)}` : '',
-          `Tax (18%): Rs.${tax.toFixed(2)}`,
-          `*Total: Rs.${total.toFixed(2)}*`,
-          `Payment: ${formData.payment_method.toUpperCase()}`,
-          staffName ? `Served by: ${staffName}` : '',
-          ``,
-          `We look forward to seeing you again!`,
-          `Call us: ${salonPhone}`
-        ].filter(Boolean).join('\n');
-
-        window.open(`https://web.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(message)}`, '_blank');
+      // Auto-send invoice via WhatsApp Cloud API (no clicking needed)
+      try {
+        await authAxios.post('/whatsapp/send-invoice', { invoice_id: createdInvoice.id });
+        toast.success('Invoice sent to customer via WhatsApp!');
+      } catch (waError) {
+        // Fallback to web.whatsapp.com if API fails
+        const customer = customers.find(c => c.id === formData.customer_id);
+        if (customer?.phone) {
+          let digits = customer.phone.replace(/[^0-9]/g, '');
+          if (digits.startsWith('0')) digits = '91' + digits.slice(1);
+          if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
+          const salonName = salonProfile?.salon_name || 'Ma-ke Salon';
+          const msg = `*${salonName}*\nInvoice: *${createdInvoice.invoice_number}*\nTotal: Rs.${createdInvoice.total?.toFixed(2) || '0'}\n\nThank you for visiting!`;
+          window.open(`https://web.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`, '_blank');
+        }
+        toast.info('WhatsApp API unavailable - opened WhatsApp Web instead');
       }
 
       resetForm();
