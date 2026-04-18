@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { MessageCircle, Share2, Image as ImageIcon } from 'lucide-react';
 
 const PRICE_LIST_IMAGE = 'https://customer-assets.emergentagent.com/job_beauty-billing-4/artifacts/jvswtnvx_WhatsApp%20Image%202026-04-18%20at%2011.03.29%20AM%20%281%29.jpeg';
+const NAILS_PRICE_IMAGE = 'https://customer-assets.emergentagent.com/job_beauty-billing-4/artifacts/3zdm8jx0_WhatsApp%20Image%202026-04-18%20at%2011.03.24%20AM%20%281%29.jpeg';
 
 const PriceList = () => {
   const [services, setServices] = useState([]);
@@ -177,6 +178,19 @@ const PriceList = () => {
                   alt="Hair Color Price List"
                   className="w-full h-auto"
                   data-testid="price-list-image"
+                />
+              </div>
+
+              <h3 className="text-sm font-medium text-[#1B3B36] mt-4 mb-3 flex items-center gap-2">
+                <ImageIcon size={16} className="text-[#D4AF37]" />
+                Nails Price Card
+              </h3>
+              <div className="rounded-xl overflow-hidden border border-[#E8EAE6]">
+                <img
+                  src={NAILS_PRICE_IMAGE}
+                  alt="Nails Price List"
+                  className="w-full h-auto"
+                  data-testid="nails-price-list-image"
                 />
               </div>
 
