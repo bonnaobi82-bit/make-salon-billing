@@ -14,6 +14,7 @@ import Staff from '@/pages/Staff';
 import Inventory from '@/pages/Inventory';
 import Invoices from '@/pages/Invoices';
 import Settings from '@/pages/Settings';
+import Promotions from '@/pages/Promotions';
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -115,6 +116,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/promotions"
+            element={
+              <ProtectedRoute>
+                <Promotions />
               </ProtectedRoute>
             }
           />

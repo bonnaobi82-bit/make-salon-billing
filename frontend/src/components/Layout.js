@@ -14,7 +14,8 @@ import {
   X,
   Bell,
   Search,
-  Sparkles
+  Sparkles,
+  Megaphone
 } from 'lucide-react';
 
 const Layout = ({ children }) => {
@@ -44,6 +45,7 @@ const Layout = ({ children }) => {
     { path: '/staff', label: 'Staff', icon: UsersRound },
     { path: '/inventory', label: 'Inventory', icon: Package },
     { path: '/invoices', label: 'Invoices', icon: Receipt },
+    { path: '/promotions', label: 'Promotions', icon: Megaphone },
     { path: '/settings', label: 'Settings', icon: Settings }
   ];
 
