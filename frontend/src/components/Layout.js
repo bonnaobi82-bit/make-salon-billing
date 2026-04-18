@@ -15,7 +15,8 @@ import {
   Bell,
   Search,
   Sparkles,
-  Megaphone
+  Megaphone,
+  ClipboardList
 } from 'lucide-react';
 
 const Layout = ({ children }) => {
@@ -45,6 +46,7 @@ const Layout = ({ children }) => {
     { path: '/staff', label: 'Staff', icon: UsersRound },
     { path: '/inventory', label: 'Inventory', icon: Package },
     { path: '/invoices', label: 'Invoices', icon: Receipt },
+    { path: '/price-list', label: 'Price List', icon: ClipboardList },
     { path: '/promotions', label: 'Promotions', icon: Megaphone },
     { path: '/settings', label: 'Settings', icon: Settings }
   ];
