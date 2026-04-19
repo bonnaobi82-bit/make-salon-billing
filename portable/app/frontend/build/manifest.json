@@ -1,0 +1,26 @@
+{
+  "short_name": "Ma-Ke Salon",
+  "name": "Ma-Ke Salon - Billing & Management",
+  "description": "Premium billing and management software for Ma-ke Salon Unisex Hair & Skin",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1B3B36",
+  "background_color": "#FBFBF9",
+  "orientation": "any",
+  "scope": "/",
+  "categories": ["business", "productivity"]
+}
