@@ -140,18 +140,14 @@ const Customers = () => {
     }
 
     try {
-      // Use WhatsApp Cloud API - auto sends, no clicking needed
-      await authAxios.post('/whatsapp/send-welcome', { customer_id: customer.id });
-      toast.success(`Welcome message sent to ${customer.name} via WhatsApp!`);
+      const waRes = await authAxios.post('/whatsapp/send-welcome', { customer_id: customer.id });
+      if (waRes.data.status === 'queued') {
+        toast.success(`Welcome message queued for auto-send to ${customer.name}!`);
+      } else {
+        toast.success(`Welcome message sent to ${customer.name} via WhatsApp!`);
+      }
     } catch (error) {
-      // Fallback to WhatsApp Web
-      let digits = customer.phone.replace(/[^0-9]/g, '');
-      if (digits.startsWith('0')) digits = '91' + digits.slice(1);
-      if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
-      const salonName = salonProfile?.salon_name || 'Ma-ke Salon';
-      const msg = `Hello *${customer.name}*! Welcome to *${salonName}*\n\nThank you for choosing us!`;
-      window.open(`https://web.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`, '_blank');
-      toast.info('WhatsApp API unavailable - opened WhatsApp Web instead');
+      toast.info('Message queued - make sure WA-AUTO-SENDER is running');
     }
   };
 

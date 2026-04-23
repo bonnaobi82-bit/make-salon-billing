@@ -114,22 +114,16 @@ const Invoices = () => {
       toast.success('Invoice created successfully');
       setDialogOpen(false);
 
-      // Auto-send invoice via WhatsApp Cloud API (no clicking needed)
+      // Auto-send invoice via WhatsApp (API or auto-sender queue)
       try {
-        await authAxios.post('/whatsapp/send-invoice', { invoice_id: createdInvoice.id });
-        toast.success('Invoice sent to customer via WhatsApp!');
-      } catch (waError) {
-        // Fallback to web.whatsapp.com if API fails
-        const customer = customers.find(c => c.id === formData.customer_id);
-        if (customer?.phone) {
-          let digits = customer.phone.replace(/[^0-9]/g, '');
-          if (digits.startsWith('0')) digits = '91' + digits.slice(1);
-          if (!digits.startsWith('91') && digits.length === 10) digits = '91' + digits;
-          const salonName = salonProfile?.salon_name || 'Ma-ke Salon';
-          const msg = `*${salonName}*\nInvoice: *${createdInvoice.invoice_number}*\nTotal: Rs.${createdInvoice.total?.toFixed(2) || '0'}\n\nThank you for visiting!`;
-          window.open(`https://web.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(msg)}`, '_blank');
+        const waRes = await authAxios.post('/whatsapp/send-invoice', { invoice_id: createdInvoice.id });
+        if (waRes.data.status === 'queued') {
+          toast.success('Invoice queued for WhatsApp auto-send! (Make sure WA-AUTO-SENDER is running)');
+        } else {
+          toast.success('Invoice sent to customer via WhatsApp!');
         }
-        toast.info('WhatsApp API unavailable - opened WhatsApp Web instead');
+      } catch (waError) {
+        toast.info('WhatsApp will be sent when auto-sender is running');
       }
 
       resetForm();

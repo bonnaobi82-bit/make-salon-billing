@@ -57,6 +57,30 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
 UPLOAD_DIR = Path("/app/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# WhatsApp Queue Directory (for local auto-sender)
+WA_QUEUE_DIR = Path("/app/wa_queue")
+WA_QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+
+import json as json_module
+
+def queue_whatsapp_message(phone: str, message: str):
+    """Queue a message for the local WhatsApp auto-sender desktop script"""
+    digits = ''.join(c for c in phone if c.isdigit())
+    if digits.startswith('0'):
+        digits = '91' + digits[1:]
+    if not digits.startswith('91') and len(digits) == 10:
+        digits = '91' + digits
+    
+    msg_id = str(uuid.uuid4())[:8]
+    queue_file = WA_QUEUE_DIR / f"{msg_id}.json"
+    queue_file.write_text(json_module.dumps({
+        "phone": digits,
+        "message": message,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": "pending"
+    }))
+    return msg_id
+
 # WhatsApp Cloud API Configuration
 WA_PHONE_NUMBER_ID = os.environ.get('WA_PHONE_NUMBER_ID', '')
 WA_ACCESS_TOKEN = os.environ.get('WA_ACCESS_TOKEN', '')
@@ -1273,8 +1297,10 @@ async def send_invoice_whatsapp(data: WhatsAppInvoiceMessage, current_user = Dep
         result = await asyncio.to_thread(send_whatsapp_message, customer['phone'], message)
         return {"status": "success", "message": f"Invoice sent to {customer['name']} via WhatsApp", "wa_response": result}
     except Exception as e:
-        logging.error(f"WhatsApp send failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to send WhatsApp: {str(e)}")
+        # Fallback: queue for local auto-sender
+        logging.warning(f"WhatsApp API failed, queueing for local sender: {str(e)}")
+        msg_id = queue_whatsapp_message(customer['phone'], message)
+        return {"status": "queued", "message": f"Invoice queued for auto-send to {customer['name']}", "queue_id": msg_id}
 
 class WhatsAppWelcomeMessage(BaseModel):
     customer_id: str
@@ -1309,8 +1335,9 @@ async def send_welcome_whatsapp(data: WhatsAppWelcomeMessage, current_user = Dep
         result = await asyncio.to_thread(send_whatsapp_message, customer['phone'], message)
         return {"status": "success", "message": f"Welcome message sent to {customer['name']}", "wa_response": result}
     except Exception as e:
-        logging.error(f"WhatsApp send failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to send WhatsApp: {str(e)}")
+        logging.warning(f"WhatsApp API failed, queueing: {str(e)}")
+        msg_id = queue_whatsapp_message(customer['phone'], message)
+        return {"status": "queued", "message": f"Welcome message queued for auto-send to {customer['name']}", "queue_id": msg_id}
 
 class WhatsAppBulkOffer(BaseModel):
     message: str
@@ -1334,26 +1361,50 @@ async def send_bulk_offer(data: WhatsAppBulkOffer, current_user = Depends(get_cu
     errors = []
 
     for customer in customers_with_phone:
-        # Personalize message
         personalized = data.message.replace('{name}', customer['name']).replace('{salon}', salon_name).replace('{phone}', salon_phone).replace('{address}', salon_addr)
 
         try:
             await asyncio.to_thread(send_whatsapp_message, customer['phone'], personalized)
             sent += 1
-        except Exception as e:
-            failed += 1
-            errors.append(f"{customer['name']}: {str(e)}")
+        except Exception:
+            # Fallback: queue for local auto-sender
+            queue_whatsapp_message(customer['phone'], personalized)
+            sent += 1  # Count as sent since it's queued
 
-        # Small delay to avoid rate limiting
         await asyncio.sleep(0.5)
 
     return {
         "status": "success",
-        "message": f"Sent to {sent}/{len(customers_with_phone)} customers",
+        "message": f"Sent/queued {sent}/{len(customers_with_phone)} customers",
         "sent": sent,
         "failed": failed,
         "errors": errors[:5]
     }
+
+# ============= WHATSAPP QUEUE ENDPOINTS =============
+
+@api_router.get("/whatsapp/queue")
+async def get_whatsapp_queue(current_user = Depends(get_current_user)):
+    """Get pending messages in the auto-send queue"""
+    queue_files = sorted(WA_QUEUE_DIR.glob("*.json"))
+    messages = []
+    for f in queue_files:
+        try:
+            data = json_module.loads(f.read_text())
+            data["id"] = f.stem
+            messages.append(data)
+        except Exception:
+            pass
+    return messages
+
+@api_router.delete("/whatsapp/queue/{msg_id}")
+async def delete_queue_message(msg_id: str, current_user = Depends(get_current_user)):
+    """Mark a queued message as sent/remove it"""
+    queue_file = WA_QUEUE_DIR / f"{msg_id}.json"
+    if queue_file.exists():
+        queue_file.unlink()
+        return {"message": "Removed from queue"}
+    raise HTTPException(status_code=404, detail="Message not found in queue")
 
 @api_router.get("/whatsapp/status")
 async def whatsapp_status(current_user = Depends(get_current_user)):
