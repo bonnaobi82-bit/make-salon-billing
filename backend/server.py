@@ -1273,6 +1273,13 @@ async def send_invoice_whatsapp(data: WhatsAppInvoiceMessage, current_user = Dep
         created_at = datetime.fromisoformat(created_at)
     date_str = created_at.strftime('%d %b %Y')
 
+    # Get loyalty points info (fetch fresh data after invoice update)
+    updated_customer = await db.customers.find_one({"id": invoice['customer_id']}, {"_id": 0})
+    loyalty_points = updated_customer.get('loyalty_points', 0) if updated_customer else 0
+    membership_tier = (updated_customer.get('membership_tier', 'bronze') if updated_customer else 'bronze').upper()
+    points_earned = int(invoice['total'] / 10)
+    redeemable_discount = (loyalty_points // 100) * 50
+
     message = (
         f"*{salon_name}*\n"
         f"Invoice: *{invoice['invoice_number']}*\n"
@@ -1291,6 +1298,22 @@ async def send_invoice_whatsapp(data: WhatsAppInvoiceMessage, current_user = Dep
     )
     if staff_name:
         message += f"Served by: {staff_name}\n"
+
+    # Add loyalty points section
+    message += f"\n{'_' * 30}\n"
+    message += f"*Your Loyalty Rewards*\n"
+    message += f"Points earned today: +{points_earned} pts\n"
+    message += f"Total points balance: *{loyalty_points} pts*\n"
+    message += f"Membership tier: *{membership_tier}*\n"
+    if redeemable_discount > 0:
+        message += f"\nYou can redeem *{(loyalty_points // 100) * 100} pts* for *Rs.{redeemable_discount} OFF* on your next visit!\n"
+        message += f"_(100 pts = Rs.50 discount. Min 100 pts to redeem)_\n"
+    else:
+        points_needed = 100 - (loyalty_points % 100)
+        message += f"\nCollect *{points_needed} more pts* to unlock Rs.50 discount!\n"
+        message += f"_(Earn 1 pt per Rs.10 spent)_\n"
+    message += f"{'_' * 30}\n"
+
     message += f"\nWe look forward to seeing you again!\nCall us: {salon_phone}"
 
     try:
